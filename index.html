@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Idle Weed Empire</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; touch-action: manipulation; }
+        .stat-card { background-color: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); }
+        .upgrade-btn { transition: all 0.2s ease-in-out; }
+        .upgrade-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); }
+        .upgrade-btn:disabled { cursor: not-allowed; opacity: 0.5; }
+        .plant-container { position: relative; }
+        .floating-text { position: absolute; top: 50%; left: 50%; color: #4ade80; font-weight: bold; font-size: 1.5rem; pointer-events: none; animation: floatUp 1s ease-out forwards; text-shadow: 0 0 5px rgba(0,0,0,0.5); }
+        @keyframes floatUp {
+            from { opacity: 1; transform: translate(-50%, -50%) translateY(0); }
+            to { opacity: 0; transform: translate(-50%, -50%) translateY(-50px); }
+        }
+        .plant-svg { cursor: pointer; transition: transform 0.1s ease-in-out; }
+        .plant-svg:active { transform: scale(0.95); }
+        .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 50; backdrop-filter: blur(5px); }
+        .modal-content { background-color: #1f2937; padding: 2rem; border-radius: 0.5rem; width: 90%; max-width: 600px; border: 1px solid rgba(255, 255, 255, 0.1); max-height: 90vh; overflow-y: auto; }
+        #event-banner { transition: all 0.5s ease-in-out; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+
+    <div id="preloader" class="fixed top-0 left-0 w-full h-full bg-gray-900 flex flex-col justify-center items-center z-50 cursor-pointer">
+        <h2 id="loading-text" class="text-2xl text-green-400 mb-4">Loading Empire...</h2>
+        <div class="w-1/2 max-w-md bg-gray-700 rounded-full h-4">
+            <div id="loading-bar" class="bg-green-500 h-4 rounded-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+    </div>
+
+    <div id="game-container" class="container mx-auto p-4 max-w-screen-xl hidden">
+        <header class="relative text-center mb-4">
+            <h1 class="text-4xl md:text-5xl font-bold text-green-400 tracking-wider" style="text-shadow: 0 0 10px rgba(74, 222, 128, 0.5);">Idle Weed Empire</h1>
+            <p class="text-gray-400 mt-2">Created by SlyRain Games</p>
+            <button id="mute-button" class="absolute top-0 right-0 p-2 text-gray-400 hover:text-white">
+                <svg id="icon-unmuted" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                </svg>
+                <svg id="icon-muted" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l-4-4m0 4l4-4" />
+                </svg>
+            </button>
+        </header>
+
+        <!-- Event Banner -->
+        <div id="event-banner" class="hidden stat-card p-3 rounded-lg shadow-lg text-center mb-4">
+            <h3 id="event-title" class="text-xl font-bold"></h3>
+            <p id="event-description" class="text-gray-300"></p>
+            <p id="event-timer" class="text-sm text-gray-400"></p>
+        </div>
+
+        <!-- Stats Section -->
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-4">
+            <div class="stat-card p-4 rounded-lg shadow-lg text-center"><h2 class="text-lg font-semibold text-gray-300">Weed on Hand</h2><p id="weed-count" class="text-2xl font-bold text-green-400">0.00 g</p></div>
+            <div class="stat-card p-4 rounded-lg shadow-lg text-center"><h2 class="text-lg font-semibold text-gray-300">Cash</h2><p id="money-count" class="text-2xl font-bold text-blue-400">$0.00</p></div>
+            <div class="stat-card p-4 rounded-lg shadow-lg text-center"><h2 class="text-lg font-semibold text-gray-300">Growth Rate</h2><p id="weed-per-second" class="text-2xl font-bold text-green-500">+0.0/s</p></div>
+            <div class="stat-card p-4 rounded-lg shadow-lg text-center"><h2 class="text-lg font-semibold text-gray-300">Passive Income</h2><p id="money-per-second" class="text-2xl font-bold text-blue-500">+$0.0/s</p></div>
+            <div class="stat-card p-4 rounded-lg shadow-lg text-center"><h2 class="text-lg font-semibold text-gray-300">Auto-Selling</h2><p id="sold-per-second" class="text-2xl font-bold text-red-500">-0.0/s</p></div>
+        </div>
+        
+        <!-- Prestige Info -->
+        <div id="prestige-info-bar" class="stat-card p-3 rounded-lg shadow-lg text-center mb-4 hidden"><h2 class="text-lg font-semibold text-purple-300">Influence</h2><div class="flex justify-center items-center space-x-4"><p class="text-2xl font-bold text-purple-400"><span id="prestige-points-count">0</span> Points</p><button id="open-prestige-shop-button" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-1 px-3 rounded">Spend</button></div></div>
+
+        <!-- Main Action Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-1 bg-gray-800 p-6 rounded-lg shadow-xl flex flex-col items-center justify-center space-y-4">
+                <div id="plant-container" class="plant-container">
+                    <svg id="plant-svg" class="plant-svg h-48 w-48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="12" cy="12" r="10" class="text-green-500" fill="currentColor" fill-opacity="0.3"/>
+                        <circle cx="12" cy="12" r="10" class="text-green-400" stroke="currentColor" stroke-width="2"/>
+                        <path d="M16.36 7.64C15.95 7.23 15.32 7.23 14.91 7.64L12 10.55L9.09 7.64C8.68 7.23 8.05 7.23 7.64 7.64C7.23 8.05 7.23 8.68 7.64 9.09L10.55 12L7.64 14.91C7.23 15.32 7.23 15.95 7.64 16.36C8.05 16.77 8.68 16.77 9.09 16.36L12 13.45L14.91 16.36C15.32 16.77 15.95 16.77 16.36 16.36C16.77 15.95 16.77 15.32 16.36 14.91L13.45 12L16.36 9.09C16.77 8.68 16.77 8.05 16.36 7.64Z" class="text-green-500" fill="currentColor"/>
+                    </svg>
+                </div>
+                <div class="w-full text-center">
+                    <p class="text-sm text-gray-400">Harvest: <span id="weed-per-click-stat" class="font-bold text-green-400"></span></p>
+                    <p class="text-sm text-gray-400">Market Price: <span id="market-status" class="font-bold"></span></p>
+                </div>
+                <button id="sell-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md text-lg">Sell Weed ($<span id="sell-price-display">2.00</span>/g)</button>
+                <button id="prestige-button" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg shadow-md text-lg hidden">Prestige Now!</button>
+            </div>
+
+            <!-- Upgrades Section -->
+            <div class="lg:col-span-2 bg-gray-800 p-6 rounded-lg shadow-xl">
+                <div id="message-box" class="mb-4 text-center text-yellow-400 h-6"></div>
+                <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                    <div id="strains-column"><h3 class="text-xl font-semibold mb-3 text-green-300">Strains</h3><div id="strains-upgrades" class="space-y-2"></div></div>
+                    <div id="equipment-column"><h3 class="text-xl font-semibold mb-3 text-yellow-300">Equipment</h3><div id="equipment-upgrades" class="space-y-2"></div></div>
+                    <div id="distribution-column" class="hidden"><h3 class="text-xl font-semibold mb-3 text-cyan-300">Distribution</h3><div id="distribution-upgrades" class="space-y-2"></div></div>
+                    <div id="businesses-column" class="hidden"><h3 class="text-xl font-semibold mb-3 text-blue-300">Businesses</h3><div id="businesses-upgrades" class="space-y-2"></div></div>
+                    <div id="luxury-column" class="hidden"><h3 class="text-xl font-semibold mb-3 text-purple-300">Luxury</h3><div id="luxury-upgrades" class="space-y-2"></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals (Prestige, Shop) -->
+    <div id="prestige-modal" class="modal-backdrop hidden"><div class="modal-content"><h2 class="text-3xl font-bold text-purple-300 mb-2">Prestige</h2><p class="text-gray-400 mb-4">Reset to earn Influence. You keep Influence Points and their upgrades. Everything else resets.</p><p class="text-lg mb-4">Cash this run: <span id="prestige-current-cash" class="font-bold text-blue-400"></span></p><p class="text-lg mb-6">Influence to gain: <span id="prestige-gain" class="font-bold text-purple-400"></span></p><div class="flex justify-end space-x-4"><button id="prestige-cancel" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">Cancel</button><button id="prestige-confirm" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded">Confirm</button></div></div></div>
+    <div id="prestige-shop-modal" class="modal-backdrop hidden"><div class="modal-content"><div class="flex justify-between items-center mb-4"><h2 class="text-3xl font-bold text-purple-300">Prestige Shop</h2><button id="prestige-shop-close" class="text-2xl font-bold text-gray-400 hover:text-white">&times;</button></div><p class="text-gray-400 mb-2">Spend Influence on permanent upgrades.</p><p class="text-lg mb-6">Available: <span id="shop-prestige-points" class="font-bold text-purple-400"></span></p><div id="prestige-upgrades-container" class="space-y-3"></div></div></div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- GAME CONFIGURATION ---
+        const PRESTIGE_REQ = 1e12;
+        const TICK_RATE = 100;
+
+        let gameState = {};
+        let lastTick = Date.now();
+        
+        // --- AUDIO SETUP ---
+        let fxVolume, musicVolume, sellSoundSynth, buySynth, musicPlayers, crossFade;
+
+        const musicTracks = {
+            track1: "https://cdn.jsdelivr.net/gh/slyraingames/WeedEmpireClicker/Back%20To%20Business!%20Jazzy%20Brass%20Game%20Music%20by%20HeatleyBros.mp3",
+            track2: "https://cdn.jsdelivr.net/gh/slyraingames/WeedEmpireClicker/Straight%20Lounge%20Chillin'!%20Chill%20Calm%20Hip%20Hop%20Game%20Music%20by%20HeatleyBros.mp3"
+        };
+
+        function setupAudio() {
+            // Volume for sound effects
+            fxVolume = new Tone.Volume(-10).toDestination(); // Approx 30% volume
+            
+            // Gold coin sound effect
+            sellSoundSynth = new Tone.FMSynth({
+                harmonicity: 3.01,
+                modulationIndex: 14,
+                envelope: { attack: 0.001, decay: 0.1, sustain: 0.1, release: 0.2 },
+                modulationEnvelope: { attack: 0.01, decay: 0.5, sustain: 0, release: 0.1 }
+            }).connect(fxVolume);
+
+            buySynth = new Tone.PluckSynth().connect(fxVolume);
+
+            // Music Player setup
+            musicVolume = new Tone.Volume(-8).toDestination(); // Approx 40% volume
+            crossFade = new Tone.CrossFade().connect(musicVolume);
+        }
+
+        const upgrades = {
+            strains: [
+                { id: 'sourDiesel', name: 'Sour Diesel', baseCost: 50, baseWpc: 1, baseWps: 0.1, desc: "+WPC & +WPS" },
+                { id: 'blueDream', name: 'Blue Dream', baseCost: 500, baseWpc: 5, baseWps: 1, desc: "+WPC & +WPS" },
+                { id: 'gsc', name: 'GSC', baseCost: 3000, baseWpc: 20, baseWps: 5, desc: "+WPC & +WPS" },
+                { id: 'ogKush', name: 'OG Kush', baseCost: 25000, baseWpc: 100, baseWps: 25, desc: "+WPC & +WPS" },
+                { id: 'whiteWidow', name: 'White Widow', baseCost: 150000, baseWpc: 500, baseWps: 120, desc: "+WPC & +WPS" },
+            ],
+            equipment: [
+                { id: 'cfl', name: 'CFL Bulb', baseCost: 100, baseWps: 0.5, desc: "+WPS" },
+                { id: 'led', name: 'LED Panel', baseCost: 1000, baseWps: 5, desc: "+WPS" },
+                { id: 'hydroponics', name: 'Hydroponics', baseCost: 12000, baseWps: 40, desc: "+WPS" },
+                { id: 'fertilizer', name: 'Auto-Fertilizer', baseCost: 100000, baseWps: 250, desc: "+WPS" },
+                { id: 'aeroponics', name: 'Aeroponics', baseCost: 800000, baseWps: 1500, desc: "+WPS" },
+            ],
+            distribution: [
+                { id: 'dealer', name: 'Street Dealer', baseCost: 1000, baseWpsSold: 0.5, desc: "Auto-sells weed/sec" },
+                { id: 'delivery', name: 'Delivery Service', baseCost: 15000, baseWpsSold: 5, desc: "Auto-sells weed/sec" },
+                { id: 'smuggling', name: 'Smuggling Ring', baseCost: 200000, baseWpsSold: 40, desc: "Auto-sells weed/sec" },
+                { id: 'export', name: 'Export Op', baseCost: 2.5e6, baseWpsSold: 300, desc: "Auto-sells weed/sec" },
+            ],
+            businesses: [
+                { id: 'cornerStore', name: 'Corner Store', baseCost: 5000, baseMps: 10, desc: "Generates cash/sec" },
+                { id: 'dispensary', name: 'Dispensary', baseCost: 75000, baseMps: 80, desc: "Generates cash/sec" },
+                { id: 'growOp', name: 'Large Grow-Op', baseCost: 1e6, baseMps: 600, desc: "Generates cash/sec" },
+                { id: 'corp', name: 'Shady Corp', baseCost: 12e6, baseMps: 5000, desc: "Generates cash/sec", synergy: { target: 'export', bonus: 0.01 } },
+            ],
+            luxury: [
+                { id: 'niceCar', name: 'Nice Car', baseCost: 25000, baseProfitBonus: 0.01, desc: "+1% sell price" },
+                { id: 'smallHouse', name: 'Small House', baseCost: 200000, baseProfitBonus: 0.02, desc: "+2% sell price" },
+                { id: 'mansion', name: 'Mansion', baseCost: 1.5e6, baseProfitBonus: 0.03, desc: "+3% sell price" },
+                { id: 'privateJet', name: 'Private Jet', baseCost: 15e6, baseProfitBonus: 0.05, desc: "+5% sell price" },
+            ]
+        };
+
+        const prestigeUpgrades = [
+            { id: 'profitBonus', name: 'Gilded Leaves', desc: 'Permanently increase all profits by 10% per level.', baseCost: 1 },
+            { id: 'startCash', name: 'Startup Capital', desc: 'Start each new run with $1000 cash per level.', baseCost: 1 },
+            { id: 'wpcBonus', name: 'Green Thumb', desc: 'Permanently increase weed per click by 25% per level.', baseCost: 2 },
+            { id: 'wpsBonus', name: 'Accelerated Growth', desc: 'Permanently increase weed per second by 25% per level.', baseCost: 2 },
+            { id: 'persistentWps', name: 'Persistent Growth', desc: 'Keep 0.5% of your previous run\'s max WPS as a starting bonus per level.', baseCost: 5 },
+        ];
+        
+        const events = [
+            { id: 'festival', title: 'Music Festival!', desc: 'Demand is through the roof! Sell prices are doubled.', duration: 120, modifier: { sellPrice: 2 } },
+            { id: 'drought', title: 'Sudden Drought!', desc: 'Growth conditions are poor. All weed growth is halved.', duration: 180, modifier: { wps: 0.5 } },
+            { id: 'police', title: 'Police Crackdown!', desc: 'Lay low! Auto-selling is disabled.', duration: 90, modifier: { wpsSold: 0 } },
+            { id: 'bumperCrop', title: 'Bumper Crop!', desc: 'Perfect growing season! All weed growth is doubled.', duration: 120, modifier: { wps: 2 } },
+            { id: 'legalization', title: 'Legalization Rumors!', desc: 'Everyone is stocking up! Sell prices +50%.', duration: 180, modifier: { sellPrice: 1.5 } },
+            { id: 'techBreakthrough', title: 'Tech Breakthrough!', desc: 'Your clicks are twice as effective!', duration: 60, modifier: { wpc: 2 } },
+        ];
+        
+        const allDomElements = {
+            preloader: document.getElementById('preloader'),
+            loadingBar: document.getElementById('loading-bar'),
+            loadingText: document.getElementById('loading-text'),
+            gameContainer: document.getElementById('game-container'),
+            plantSvg: document.getElementById('plant-svg'), messageBox: document.getElementById('message-box'),
+            weedCount: document.getElementById('weed-count'), moneyCount: document.getElementById('money-count'),
+            wpsDisplay: document.getElementById('weed-per-second'), mpsDisplay: document.getElementById('money-per-second'),
+            wpsSoldDisplay: document.getElementById('sold-per-second'), wpcDisplay: document.getElementById('weed-per-click-stat'),
+            marketStatus: document.getElementById('market-status'), sellPriceDisplay: document.getElementById('sell-price-display'),
+            sellButton: document.getElementById('sell-button'), prestigeButton: document.getElementById('prestige-button'),
+            prestigeInfoBar: document.getElementById('prestige-info-bar'), prestigePointsCount: document.getElementById('prestige-points-count'),
+            prestigeModal: document.getElementById('prestige-modal'), prestigeCurrentCash: document.getElementById('prestige-current-cash'),
+            prestigeGain: document.getElementById('prestige-gain'), prestigeCancel: document.getElementById('prestige-cancel'),
+            prestigeConfirm: document.getElementById('prestige-confirm'), prestigeShopModal: document.getElementById('prestige-shop-modal'),
+            prestigeShopClose: document.getElementById('prestige-shop-close'), shopPrestigePoints: document.getElementById('shop-prestige-points'),
+            prestigeUpgradesContainer: document.getElementById('prestige-upgrades-container'),
+            eventBanner: document.getElementById('event-banner'), eventTitle: document.getElementById('event-title'),
+            eventDescription: document.getElementById('event-description'), eventTimer: document.getElementById('event-timer'),
+            distributionColumn: document.getElementById('distribution-column'), businessesColumn: document.getElementById('businesses-column'),
+            luxuryColumn: document.getElementById('luxury-column'),
+            muteButton: document.getElementById('mute-button'),
+            iconMuted: document.getElementById('icon-muted'),
+            iconUnmuted: document.getElementById('icon-unmuted'),
+        };
+
+        function formatNumber(num, decimals = 2) {
+            if (num < 1e3) return num.toFixed(decimals);
+            const suffixes = ['K', 'M', 'B', 'T', 'Q', 'E'];
+            const i = Math.floor(Math.log10(Math.abs(num)) / 3) - 1;
+            return (num / Math.pow(1000, i + 1)).toFixed(decimals) + suffixes[i];
+        }
+
+        const get = {
+            upgradeCost: (item) => item.baseCost * Math.pow(1.15, gameState.upgrades[item.id] || 0),
+            prestigeUpgradeCost: (item) => Math.ceil(item.baseCost * Math.pow(1.5, gameState.prestige.upgrades[item.id] || 0)),
+            
+            wps: () => {
+                let total = gameState.prestige.persistentWpsBonus || 0;
+                upgrades.strains.forEach(u => total += (u.baseWps || 0) * (gameState.upgrades[u.id] || 0));
+                upgrades.equipment.forEach(u => total += (u.baseWps || 0) * (gameState.upgrades[u.id] || 0));
+                total *= (1 + ((gameState.prestige.upgrades.wpsBonus || 0) * 0.25));
+                return total * (gameState.activeEvent?.modifier.wps ?? 1);
+            },
+            wpc: () => {
+                let total = 1;
+                upgrades.strains.forEach(u => total += (u.baseWpc || 0) * (gameState.upgrades[u.id] || 0));
+                total *= (1 + ((gameState.prestige.upgrades.wpcBonus || 0) * 0.25));
+                return total * (gameState.activeEvent?.modifier.wpc ?? 1);
+            },
+            wpsSold: () => {
+                let total = 0;
+                upgrades.distribution.forEach(u => {
+                    let itemTotal = (u.baseWpsSold || 0) * (gameState.upgrades[u.id] || 0);
+                    if (u.id === 'export' && gameState.upgrades.corp > 0) {
+                        itemTotal *= (1 + (upgrades.businesses.find(b => b.id === 'corp').synergy.bonus * gameState.upgrades.corp));
+                    }
+                    total += itemTotal;
+                });
+                return total * (gameState.activeEvent?.modifier.wpsSold ?? 1);
+            },
+            mps: () => {
+                let total = 0;
+                upgrades.businesses.forEach(u => total += (u.baseMps || 0) * (gameState.upgrades[u.id] || 0));
+                return total;
+            },
+            sellPrice: () => {
+                let bonus = 1.0;
+                upgrades.luxury.forEach(u => bonus += (u.baseProfitBonus || 0) * (gameState.upgrades[u.id] || 0));
+                bonus *= (1 + (gameState.prestige.upgrades.profitBonus || 0) * 0.1);
+                const basePrice = 2.00 * bonus;
+                const marketPrice = basePrice * gameState.market.modifier;
+                return marketPrice * (gameState.activeEvent?.modifier.sellPrice ?? 1);
+            },
+            prestigeGain: () => {
+                if (gameState.totalMoney < PRESTIGE_REQ) return 0;
+                return Math.floor(5 * Math.log10(gameState.totalMoney / PRESTIGE_REQ));
+            }
+        };
+        
+        function getInitialState() {
+             const prestigeState = gameState.prestige || { points: 0, upgrades: {}, maxWps: 0, persistentWpsBonus: 0 };
+             const startCash = (prestigeState.upgrades.startCash || 0) * 1000;
+             return {
+                weed: 0, money: 10 + startCash, totalMoney: 10 + startCash,
+                upgrades: {}, prestige: prestigeState,
+                market: { status: 'Stable', modifier: 1.0, color: 'text-yellow-400', nextChange: Date.now() + 180000 },
+                activeEvent: null, nextEventCheck: Date.now() + 60000,
+                soundInitialized: false,
+                isMuted: false,
+            };
+        }
+
+        function hardReset() {
+            const prestigeData = gameState.prestige;
+            prestigeData.points += get.prestigeGain();
+            prestigeData.maxWps = Math.max(prestigeData.maxWps || 0, get.wps());
+            prestigeData.persistentWpsBonus = (prestigeData.maxWps * (prestigeData.upgrades.persistentWps || 0) * 0.005);
+            
+            const startCash = (prestigeData.upgrades.startCash || 0) * 1000;
+            gameState = {
+                weed: 0, money: 10 + startCash, totalMoney: 10 + startCash,
+                upgrades: {}, prestige: prestigeData,
+                market: { status: 'Stable', modifier: 1.0, color: 'text-yellow-400', nextChange: Date.now() + 180000 },
+                activeEvent: null, nextEventCheck: Date.now() + 60000,
+                soundInitialized: gameState.soundInitialized,
+                isMuted: gameState.isMuted,
+            };
+            saveGame();
+            window.location.reload();
+        }
+        
+        function showMessage(text) {
+            allDomElements.messageBox.textContent = text;
+            setTimeout(() => { if (allDomElements.messageBox.textContent === text) allDomElements.messageBox.textContent = ''; }, 3000);
+        }
+
+        function buyUpgrade(category, id) {
+            const item = upgrades[category].find(u => u.id === id);
+            const cost = get.upgradeCost(item);
+            if (gameState.money >= cost) {
+                gameState.money -= cost;
+                gameState.upgrades[item.id] = (gameState.upgrades[item.id] || 0) + 1;
+                if (gameState.soundInitialized) {
+                    const notes = ["C4", "E4", "G4", "A4"];
+                    buySynth.triggerAttackRelease(notes[Math.floor(Math.random() * notes.length)], "8n");
+                }
+            } else {
+                showMessage("Not enough cash!");
+            }
+        }
+
+        function buyPrestigeUpgrade(id) {
+            const item = prestigeUpgrades.find(u => u.id === id);
+            const cost = get.prestigeUpgradeCost(item);
+            if (gameState.prestige.points >= cost) {
+                gameState.prestige.points -= cost;
+                gameState.prestige.upgrades[item.id] = (gameState.prestige.upgrades[item.id] || 0) + 1;
+                if (gameState.soundInitialized) {
+                    const notes = ["C5", "E5", "G5", "A5"];
+                    buySynth.triggerAttackRelease(notes[Math.floor(Math.random() * notes.length)], "8n", Tone.now() + 0.1);
+                }
+                renderPrestigeUpgrades();
+            } else {
+                showMessage("Not enough Influence Points!");
+            }
+        }
+
+        function updateMarket() {
+            const marketStates = [
+                { status: 'Low', modifier: 0.7, color: 'text-red-400' },
+                { status: 'Stable', modifier: 1.0, color: 'text-yellow-400' },
+                { status: 'High', modifier: 1.5, color: 'text-green-400' },
+                { status: 'Frenzy', modifier: 2.0, color: 'text-green-400' },
+            ];
+            gameState.market = { ...marketStates[Math.floor(Math.random() * marketStates.length)], nextChange: Date.now() + (120 + Math.random() * 120) * 1000 };
+        }
+
+        function triggerEvent() {
+            if (gameState.activeEvent) return;
+            const event = { ...events[Math.floor(Math.random() * events.length)], end: Date.now() + events[Math.floor(Math.random() * events.length)].duration * 1000 };
+            gameState.activeEvent = event;
+            gameState.nextEventCheck = Date.now() + (180 + Math.random() * 180) * 1000;
+        }
+
+        function renderAll() {
+            // Stats
+            const wps = get.wps();
+            gameState.prestige.maxWps = Math.max(gameState.prestige.maxWps || 0, wps);
+            allDomElements.weedCount.textContent = `${formatNumber(gameState.weed)} g`;
+            allDomElements.moneyCount.textContent = `$${formatNumber(gameState.money)}`;
+            allDomElements.wpsDisplay.textContent = `+${formatNumber(wps)}/s`;
+            allDomElements.mpsDisplay.textContent = `+$${formatNumber(get.mps())}/s`;
+            allDomElements.wpsSoldDisplay.textContent = `-${formatNumber(get.wpsSold())}/s`;
+            allDomElements.wpcDisplay.textContent = `+${formatNumber(get.wpc())}/click`;
+
+            // Market
+            allDomElements.marketStatus.textContent = gameState.market.status;
+            allDomElements.marketStatus.className = `font-bold ${gameState.market.color}`;
+            allDomElements.sellPriceDisplay.textContent = get.sellPrice().toFixed(2);
+
+            // Prestige
+            allDomElements.prestigeButton.classList.toggle('hidden', gameState.totalMoney < PRESTIGE_REQ);
+            const hasPrestiged = gameState.prestige.points > 0 || Object.keys(gameState.prestige.upgrades).length > 0;
+            allDomElements.prestigeInfoBar.classList.toggle('hidden', !hasPrestiged);
+            if (hasPrestiged) allDomElements.prestigePointsCount.textContent = formatNumber(gameState.prestige.points, 0);
+
+            // Event Banner
+            if (gameState.activeEvent) {
+                allDomElements.eventBanner.classList.remove('hidden');
+                allDomElements.eventTitle.textContent = gameState.activeEvent.title;
+                allDomElements.eventDescription.textContent = gameState.activeEvent.desc;
+                allDomElements.eventTimer.textContent = `Time left: ${Math.ceil((gameState.activeEvent.end - Date.now()) / 1000)}s`;
+            } else {
+                allDomElements.eventBanner.classList.add('hidden');
+            }
+
+            // Upgrade Buttons
+            Object.keys(upgrades).forEach(category => {
+                upgrades[category].forEach(item => {
+                    const btn = document.getElementById(`buy-${item.id}`);
+                    if (btn) {
+                        btn.disabled = gameState.money < get.upgradeCost(item);
+                        btn.querySelector('.cost').textContent = `$${formatNumber(get.upgradeCost(item))}`;
+                        btn.querySelector('.level').textContent = `Lvl ${gameState.upgrades[item.id] || 0}`;
+                    }
+                });
+            });
+
+            // Progressive UI Unlocks
+            allDomElements.distributionColumn.classList.toggle('hidden', gameState.totalMoney < 500);
+            allDomElements.businessesColumn.classList.toggle('hidden', gameState.totalMoney < 5000);
+            allDomElements.luxuryColumn.classList.toggle('hidden', gameState.totalMoney < 25000);
+        }
+
+        function renderStaticUpgrades() {
+            Object.keys(upgrades).forEach(category => {
+                const container = document.getElementById(`${category}-upgrades`);
+                container.innerHTML = '';
+                upgrades[category].forEach(item => {
+                    const btn = document.createElement('button');
+                    btn.id = `buy-${item.id}`;
+                    btn.className = 'w-full text-left p-2 rounded-md bg-gray-700 hover:bg-gray-600 upgrade-btn flex justify-between items-center';
+                    btn.innerHTML = `<div><span class="font-semibold">${item.name}</span><span class="text-xs text-gray-400 block">${item.desc}</span><span class="text-sm font-bold text-blue-400 mt-1 cost"></span></div><div class="text-right font-bold text-lg level">Lvl 0</div>`;
+                    btn.onclick = () => buyUpgrade(category, item.id);
+                    container.appendChild(btn);
+                });
+            });
+        }
+
+        function renderPrestigeUpgrades() {
+            const container = allDomElements.prestigeUpgradesContainer;
+            container.innerHTML = '';
+            allDomElements.shopPrestigePoints.textContent = formatNumber(gameState.prestige.points, 0);
+            prestigeUpgrades.forEach(item => {
+                const level = gameState.prestige.upgrades[item.id] || 0;
+                const cost = get.prestigeUpgradeCost(item);
+                const btn = document.createElement('button');
+                btn.className = 'w-full text-left p-3 rounded-md bg-gray-700 hover:bg-gray-600 upgrade-btn flex justify-between items-center';
+                btn.innerHTML = `<div><span class="font-semibold text-purple-300">${item.name}</span><span class="text-xs text-gray-400 block">${item.desc}</span><span class="text-sm font-bold text-purple-400 mt-1">Cost: ${formatNumber(cost, 0)} P</span></div><div class="text-right font-bold text-lg">Lvl ${level}</div>`;
+                btn.onclick = () => buyPrestigeUpgrade(item.id);
+                btn.disabled = gameState.prestige.points < cost;
+                container.appendChild(btn);
+            });
+        }
+        
+        function gameLoop() {
+            const now = Date.now();
+            const delta = (now - lastTick) / 1000;
+            gameState.weed += get.wps() * delta;
+            gameState.money += get.mps() * delta;
+            const canSell = get.wpsSold() * delta;
+            const actuallySold = Math.min(gameState.weed, canSell);
+            if (actuallySold > 0) {
+                const earnings = actuallySold * get.sellPrice();
+                gameState.weed -= actuallySold;
+                gameState.money += earnings;
+                gameState.totalMoney += earnings;
+            }
+            if (now > gameState.market.nextChange) updateMarket();
+            if (now > gameState.nextEventCheck) triggerEvent();
+            if (gameState.activeEvent && now > gameState.activeEvent.end) gameState.activeEvent = null;
+            lastTick = now;
+            renderAll();
+        }
+        
+        function saveGame() {
+            localStorage.setItem('idleWeedEmpireSave_v7', JSON.stringify(gameState));
+        }
+
+        function loadGame() {
+            const savedGame = localStorage.getItem('idleWeedEmpireSave_v7');
+            if (savedGame) {
+                const loadedState = JSON.parse(savedGame);
+                gameState = { ...getInitialState(), ...loadedState };
+                gameState.prestige = { ...getInitialState().prestige, ...(loadedState.prestige || {}) };
+                gameState.prestige.upgrades = { ...(getInitialState().prestige.upgrades), ...(loadedState.prestige.upgrades || {}) };
+            } else {
+                gameState = getInitialState();
+            }
+        }
+
+        function startPreloading() {
+            musicPlayers = new Tone.Players(musicTracks, {
+                onload: () => {
+                    console.log("Music files loaded.");
+                    allDomElements.loadingText.textContent = "Click anywhere to start";
+                    allDomElements.loadingBar.style.width = '100%';
+
+                    document.getElementById('preloader').addEventListener('click', () => {
+                        allDomElements.preloader.classList.add('hidden');
+                        allDomElements.gameContainer.classList.remove('hidden');
+                        initGame();
+                    }, { once: true });
+                },
+                onprogress: (progress) => {
+                    allDomElements.loadingBar.style.width = `${progress * 100}%`;
+                }
+            });
+        }
+
+        function initGame() {
+            loadGame();
+
+            if (!gameState.soundInitialized) {
+                Tone.start();
+                setupAudio();
+                gameState.soundInitialized = true;
+                console.log("Audio context started.");
+
+                const player1 = musicPlayers.player('track1').connect(crossFade.a);
+                const player2 = musicPlayers.player('track2').connect(crossFade.b);
+                
+                const crossfadeTime = 2;
+
+                const scheduleCrossfade = (currentPlayer, nextPlayer) => {
+                    const duration = currentPlayer.buffer.duration;
+                    Tone.Transport.scheduleOnce((time) => {
+                        crossFade.fade.rampTo(nextPlayer === player1 ? 0 : 1, crossfadeTime);
+                        scheduleCrossfade(nextPlayer, currentPlayer);
+                    }, Tone.now() + duration - crossfadeTime);
+                };
+
+                // Start the first track
+                player1.start();
+                crossFade.fade.value = 0;
+                scheduleCrossfade(player1, player2);
+
+                Tone.Transport.start();
+            }
+
+            renderStaticUpgrades();
+            
+            allDomElements.plantSvg.addEventListener('click', () => {
+                gameState.weed += get.wpc()
+            });
+
+            allDomElements.sellButton.addEventListener('click', () => {
+                if (gameState.weed >= 1) {
+                    const amount = Math.floor(gameState.weed);
+                    const earnings = amount * get.sellPrice();
+                    gameState.money += earnings; gameState.totalMoney += earnings; gameState.weed -= amount;
+                    if (gameState.soundInitialized) {
+                        sellSoundSynth.triggerAttackRelease("C6", "8n");
+                    }
+                    showMessage(`Sold ${formatNumber(amount)}g for $${formatNumber(earnings)}!`);
+                }
+            });
+
+            allDomElements.muteButton.addEventListener('click', () => {
+                gameState.isMuted = !gameState.isMuted;
+                musicVolume.mute = gameState.isMuted;
+                allDomElements.iconMuted.classList.toggle('hidden', !gameState.isMuted);
+                allDomElements.iconUnmuted.classList.toggle('hidden', gameState.isMuted);
+            });
+
+            // Set initial mute state from save
+            if (gameState.soundInitialized) {
+                musicVolume.mute = gameState.isMuted;
+                allDomElements.iconMuted.classList.toggle('hidden', !gameState.isMuted);
+                allDomElements.iconUnmuted.classList.toggle('hidden', gameState.isMuted);
+            }
+
+
+            allDomElements.prestigeButton.addEventListener('click', () => {
+                allDomElements.prestigeCurrentCash.textContent = `$${formatNumber(gameState.totalMoney)}`;
+                allDomElements.prestigeGain.textContent = `${get.prestigeGain()} points`;
+                allDomElements.prestigeModal.classList.remove('hidden');
+            });
+            allDomElements.prestigeCancel.addEventListener('click', () => allDomElements.prestigeModal.classList.add('hidden'));
+            allDomElements.prestigeConfirm.addEventListener('click', () => {
+                if (get.prestigeGain() > 0) hardReset();
+                else { showMessage("Not enough cash to prestige!"); allDomElements.prestigeModal.classList.add('hidden'); }
+            });
+            document.getElementById('open-prestige-shop-button').addEventListener('click', () => {
+                renderPrestigeUpgrades();
+                allDomElements.prestigeShopModal.classList.remove('hidden');
+            });
+            allDomElements.prestigeShopClose.addEventListener('click', () => allDomElements.prestigeShopModal.classList.add('hidden'));
+            setInterval(gameLoop, TICK_RATE);
+            setInterval(saveGame, 5000);
+            lastTick = Date.now();
+            renderAll();
+        }
+
+        startPreloading();
+    });
+    </script>
+</body>
+</html>
